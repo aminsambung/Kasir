@@ -14,6 +14,10 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
+      # ⚠️ TAMBAHAN: Instal ImageMagick terlebih dahulu
+      - name: 🛠️ Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
       # ⚠️ SCRIPT TAMBAHAN UNTUK MEMBUAT IKON OTOMATIS ⚠️
       - name: 🖼️ Generate App Icons from logo.png
         run: |
