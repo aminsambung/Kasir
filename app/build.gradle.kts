@@ -1,8 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("com.google.devtools.ksp") version "1.9.20-1.0.14"
-    id("org.jetbrains.kotlin.plugin.compose") version "1.9.20"
+    id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -16,13 +16,22 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
-    buildFeatures { compose = true }
-    composeOptions { kotlinCompilerExtensionVersion = "1.5.4" }
+    
+    buildFeatures { 
+        compose = true 
+    }
+    
+    // ⚠️ PENTING: Blok composeOptions DIHAPUS karena Kotlin 2.0+ 
+    // sudah otomatis menangani compiler Compose lewat plugin.
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    
+    kotlinOptions { 
+        jvmTarget = "17" 
+    }
 }
 
 dependencies {
