@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,8 +29,13 @@ fun KasirScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    var showPayment by remember { mutableStateOf(false) }
 
+    // State dialog
+    var showPayment by remember { mutableStateOf(false) }
+    var showDiskonDialog by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
+
+    // Tampilkan error via snackbar
     LaunchedEffect(state.error) {
         state.error?.let {
             snackbar.showSnackbar(it)
@@ -45,12 +51,16 @@ fun KasirScreen(
                     IconButton(onClick = onScanClick) {
                         Icon(Icons.Default.QrCodeScanner, "Scan")
                     }
+                    if (state.cart.isNotEmpty()) {
+                        IconButton(onClick = { showResetDialog = true }) {
+                            Icon(Icons.Default.DeleteSweep, "Kosongkan")
+                        }
+                    }
                 }
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            // Bar bawah: total + tombol bayar
             Surface(tonalElevation = 3.dp, shadowElevation = 8.dp) {
                 Column(Modifier.padding(16.dp)) {
                     Row(
@@ -95,9 +105,12 @@ fun KasirScreen(
                 Text("Scan Barcode")
             }
 
-            // Daftar item keranjang
+            // Daftar item keranjang / placeholder
             if (state.cart.isEmpty()) {
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             Icons.Default.ShoppingCart,
@@ -109,7 +122,7 @@ fun KasirScreen(
                         Text(
                             "Keranjang kosong\nScan barcode untuk mulai",
                             color = MaterialTheme.colorScheme.outline,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
@@ -133,19 +146,19 @@ fun KasirScreen(
                 }
             }
 
-            // Ringkasan
+            // Ringkasan bawah
             Divider()
             Column(Modifier.padding(vertical = 8.dp)) {
                 SummaryRow("Subtotal", formatRupiah(state.subtotal))
                 SummaryRow(
                     "Diskon",
-                    "- " + formatRupiah(state.diskon),
+                    if (state.diskon > 0) "- " + formatRupiah(state.diskon) else formatRupiah(0),
                     trailingContent = {
                         IconButton(
-                            onClick = { /* buka dialog diskon */ },
+                            onClick = { showDiskonDialog = true },
                             modifier = Modifier.size(28.dp)
                         ) {
-                            Icon(Icons.Default.Edit, null, Modifier.size(16.dp))
+                            Icon(Icons.Default.Edit, "Edit diskon", Modifier.size(16.dp))
                         }
                     }
                 )
@@ -154,8 +167,7 @@ fun KasirScreen(
         }
     }
 
-    // Dialog Diskon
-    var showDiskonDialog by remember { mutableStateOf(false) }
+    // ── Dialog Diskon ──
     if (showDiskonDialog) {
         DiskonDialog(
             current = state.diskon,
@@ -168,7 +180,25 @@ fun KasirScreen(
         )
     }
 
-    // Dialog Pembayaran
+    // ── Dialog Reset Keranjang ──
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Kosongkan Keranjang?") },
+            text = { Text("Semua item di keranjang akan dihapus.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.reset()
+                    showResetDialog = false
+                }) { Text("Ya, Kosongkan") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+
+    // ── Dialog Pembayaran ──
     if (showPayment) {
         PaymentDialog(
             state = state,
@@ -183,11 +213,11 @@ fun KasirScreen(
             }
         )
     }
-
-    // Trigger buka dialog diskon dari SummaryRow
-    LaunchedEffect(Unit) { /* placeholder */ }
 }
 
+// ─────────────────────────────────────────────
+// Komponen: Baris item keranjang
+// ─────────────────────────────────────────────
 @Composable
 private fun CartItemRow(
     nama: String,
@@ -237,6 +267,9 @@ private fun CartItemRow(
     }
 }
 
+// ─────────────────────────────────────────────
+// Komponen: Baris ringkasan
+// ─────────────────────────────────────────────
 @Composable
 private fun SummaryRow(
     label: String,
@@ -256,6 +289,9 @@ private fun SummaryRow(
     }
 }
 
+// ─────────────────────────────────────────────
+// Dialog: Diskon (nominal / persen)
+// ─────────────────────────────────────────────
 @Composable
 private fun DiskonDialog(
     current: Long,
@@ -319,6 +355,9 @@ private fun DiskonDialog(
     )
 }
 
+// ─────────────────────────────────────────────
+// Dialog: Pembayaran
+// ─────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PaymentDialog(
@@ -337,7 +376,7 @@ private fun PaymentDialog(
         title = { Text("Pembayaran") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Total
+                // Kartu total
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,
                     shape = MaterialTheme.shapes.medium,
@@ -369,7 +408,7 @@ private fun PaymentDialog(
                     }
                 }
 
-                // Input nominal (hanya tunai)
+                // Input nominal khusus tunai
                 if (state.metodeBayar == "TUNAI") {
                     OutlinedTextField(
                         value = bayarText,
@@ -382,8 +421,11 @@ private fun PaymentDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    // Tombol uang pas & pecahan cepat
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Tombol cepat
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         AssistChip(
                             onClick = {
                                 bayarText = state.total.toString()
@@ -404,9 +446,9 @@ private fun PaymentDialog(
 
                     // Kembalian
                     val kembalian = (state.bayar - state.total).coerceAtLeast(0)
+                    val cukup = state.bayar >= state.total
                     Surface(
-                        color = if (state.bayar >= state.total)
-                            Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                        color = if (cukup) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
                         shape = MaterialTheme.shapes.small,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -414,15 +456,11 @@ private fun PaymentDialog(
                             Modifier.padding(10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                "Kembalian",
-                                fontWeight = FontWeight.Medium
-                            )
+                            Text("Kembalian", fontWeight = FontWeight.Medium)
                             Text(
                                 formatRupiah(kembalian),
                                 fontWeight = FontWeight.Bold,
-                                color = if (state.bayar >= state.total)
-                                    Color(0xFF2E7D32) else Color(0xFFC62828)
+                                color = if (cukup) Color(0xFF2E7D32) else Color(0xFFC62828)
                             )
                         }
                     }
@@ -432,7 +470,7 @@ private fun PaymentDialog(
         confirmButton = {
             TextButton(
                 onClick = onKonfirmasi,
-                enabled = state.metodeBayar != "TUNAI" || state.bayar >= state.total
+                enabled = state.isBayarCukup
             ) {
                 Text("Konfirmasi & Simpan", fontWeight = FontWeight.Bold)
             }
