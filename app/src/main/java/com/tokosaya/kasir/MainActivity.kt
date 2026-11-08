@@ -1,5 +1,7 @@
 package com.tokosaya.kasir
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,8 +30,25 @@ import com.tokosaya.kasir.ui.scan.BarcodeScanScreen
 import com.tokosaya.kasir.ui.theme.KasirTheme
 
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        private const val REQ_BT = 1001
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // ── Minta izin Bluetooth (Android 12+) ──
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            requestPermissions(
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN
+                ),
+                REQ_BT
+            )
+        }
+
         val db = AppDatabase.get(this)
         val productRepo = ProductRepository(db.productDao())
         val trxRepo = TransactionRepository(db.transactionDao())
@@ -54,32 +73,30 @@ fun KasirApp(
     trxRepo: TransactionRepository
 ) {
     val nav = rememberNavController()
+    val kasirVm: KasirViewModel = viewModel(
+        factory = SimpleVmFactory { KasirViewModel(productRepo, trxRepo) }
+    )
+    var showPayment by remember { mutableStateOf(false) }
 
     NavHost(navController = nav, startDestination = "kasir") {
         composable("kasir") {
-            val vm: KasirViewModel = viewModel(
-                factory = SimpleVmFactory { KasirViewModel(productRepo, trxRepo) }
-            )
-            var showPayment by remember { mutableStateOf(false) }
-
             KasirScreen(
-                vm = vm,
+                vm = kasirVm,
                 onScanClick = { nav.navigate("scan") },
-                onBayarSuccess = { /* bisa tambah navigasi struk */ }
+                onBayarSuccess = { /* tampil struk / toast */ }
             )
-
-            // tombol bayar dari bawah — kita panggil dialog dari sini
-            // karena KasirScreen sudah punya tombol bayar sendiri,
-            // kita perlu expose callback. Simpelnya: tambah tombol di FAB
-            // (lihat catatan di bawah)
+            if (showPayment) {
+                PaymentDialog(
+                    vm = kasirVm,
+                    onDismiss = { showPayment = false },
+                    onSuccess = { showPayment = false }
+                )
+            }
         }
         composable("scan") {
-            val vm: KasirViewModel = viewModel(
-                factory = SimpleVmFactory { KasirViewModel(productRepo, trxRepo) }
-            )
             BarcodeScanScreen(
                 onBarcode = { barcode ->
-                    vm.tambahByBarcode(barcode)
+                    kasirVm.tambahByBarcode(barcode)
                     nav.popBackStack()
                 },
                 onClose = { nav.popBackStack() }
@@ -91,8 +108,6 @@ fun KasirApp(
             )
             ProdukScreen(vm)
         }
-        composable("laporan") {
-            LaporanScreen(trxRepo)
-        }
+        composable("laporan") { LaporanScreen(trxRepo) }
     }
 }
